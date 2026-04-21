@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	pb "github.com/GoogleCloudPlatform/microservices-demo/src/productcatalogservice/genproto"
@@ -97,15 +96,15 @@ func main() {
 	}
 
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGUSR1, syscall.SIGUSR2)
+	signal.Notify(sigs, reloadSignals()...)
 	go func() {
 		for {
 			sig := <-sigs
 			log.Printf("Received signal: %s", sig)
-			if sig == syscall.SIGUSR1 {
+			if isReloadEnableSignal(sig) {
 				reloadCatalog = true
 				log.Infof("Enable catalog reloading")
-			} else {
+			} else if isReloadDisableSignal(sig) {
 				reloadCatalog = false
 				log.Infof("Disable catalog reloading")
 			}
