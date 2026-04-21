@@ -2,150 +2,166 @@
 
 ## Objective
 
-This document captures:
+This document records the selection and implementation approach for a narrowly
+scoped service-level integration test within `microservices-demo`.
 
-- The approach taken to identify a suitable integration test seam
-- The reasoning behind the final design decision
-- Trade-offs considered during implementation
-- The resulting test strategy and execution model
+It captures:
 
-The goal was to deliver a **single, high-signal integration test** demonstrating service cooperation, with minimal implementation overhead and a clear CI execution path.
+- the integration-boundary selection process
+- the design constraints that shaped the choice
+- the resulting test structure and assertion model
+- the execution model for local and CI-style validation
+
+The design goal is to validate real cooperation between running services while
+keeping the dependency surface, setup cost, and flake risk low.
+
+---
+
+## System Context
+
+`microservices-demo` is a distributed system composed of multiple services that
+communicate primarily through gRPC, with selected HTTP entry points at the
+frontend boundary.
+
+Integration-boundary selection matters in this system because unnecessary
+orchestration complexity increases setup cost, broadens the dependency surface,
+and raises flake risk. A useful integration test should therefore exercise a
+real service boundary without implicitly depending on unrelated parts of the
+application.
 
 ---
 
 ## Problem Context
 
-The task required:
+The design requirements were:
 
-- Adding an **integration test between two services**
-- Verifying **real cooperation between running services**
-- Providing **automation compatible with CI execution**
-- Optimising for **approach clarity**, not coverage completeness
+- add a single integration test between two services
+- verify real cooperation between running services
+- support execution in a CI-compatible flow
+- optimise for boundary clarity rather than broad coverage
 
-Constraints:
+Existing repository capabilities:
 
-- Timeboxed (~2 days)
-- Existing system is a **multi-service Kubernetes-based architecture**
-- Repo already includes:
-  - Unit tests (Go, C#)
-  - CI workflows
-  - Deployment + smoke validation
+- unit tests in Go and C#
+- GitHub Actions workflows
+- deployment and post-deployment smoke validation
 
 ---
 
-## Strategy
+## Approach
 
-We followed a structured, staged approach.
+The design was developed in a staged manner.
 
 ### 1. Environment Bring-up
 
-Before designing tests, we ensured:
+Before selecting a boundary, the runtime environment was checked to confirm
+that:
 
-- Docker, Kubernetes, kubectl, and Skaffold were operational
-- The full system could be deployed via:
+- Docker, Kubernetes, `kubectl`, and Skaffold were operational
+- the full system could be deployed via:
 
-```
+```bash
 skaffold run
 ```
 
-- All services were running and reachable
+- services became reachable after deployment
 
-Rationale:
-
-Integration testing depends entirely on system runtime stability. This step removed infrastructure uncertainty early.
+This establishes a stable execution baseline before introducing test logic.
 
 ---
 
 ### 2. Candidate Seam Identification
 
-We analysed the service architecture to identify plausible seams:
+The following service boundaries were identified as plausible candidates:
 
-| Caller                | Callee                 | Type         |
-|----------------------|------------------------|--------------|
-| frontend             | productcatalogservice  | HTTP → gRPC  |
-| frontend             | currencyservice        | HTTP → gRPC  |
-| checkoutservice      | paymentservice         | gRPC         |
-| checkoutservice      | shippingservice        | gRPC         |
-| recommendationservice| productcatalogservice  | gRPC         |
+| Caller | Callee | Type |
+| --- | --- | --- |
+| `frontend` | `productcatalogservice` | HTTP → gRPC |
+| `frontend` | `currencyservice` | HTTP → gRPC |
+| `checkoutservice` | `paymentservice` | gRPC |
+| `checkoutservice` | `shippingservice` | gRPC |
+| `recommendationservice` | `productcatalogservice` | gRPC |
 
 ---
 
 ### 3. Evaluation Criteria
 
-Each seam was evaluated against:
+Each candidate boundary was evaluated against:
 
-- Implementation simplicity
-- Stability / flake risk
-- Data independence (low brittleness)
-- Observability (ease of assertion)
+- implementation simplicity
+- stability and flake risk
+- data independence and low brittleness
+- observability and ease of assertion
 - CI friendliness
-- Interview signal
+- architectural clarity
 
 ---
 
 ### 4. Key Observations
 
-#### Frontend-based seams
+#### Frontend-based boundaries
 
-Pros:
-- Easy to drive via HTTP
-- Human-readable outputs
+Strengths:
 
-Cons:
-- Coupled to UI rendering
-- Often pull in multiple downstream services
-- Require complex environment setup
+- straightforward to drive through HTTP
+- outputs are easy to inspect
 
-#### Checkoutservice seams
+Limitations:
 
-Pros:
-- Architecturally meaningful
+- coupled to frontend runtime behaviour
+- frequently pull in multiple downstream services
+- require a larger startup surface than the boundary itself suggests
 
-Cons:
-- High orchestration complexity
-- Depend on multiple services
-- Increased flake and setup cost
+#### Checkoutservice boundaries
 
-#### Recommendationservice seam
+Strengths:
 
-Pros:
-- Clean one-to-one dependency on productcatalogservice
-- True service-to-service interaction
-- Minimal dependency surface
+- operationally meaningful service interactions
 
-Cons:
-- Output is non-deterministic (random sampling)
+Limitations:
+
+- high orchestration complexity
+- dependence on multiple additional services
+- increased setup cost and flake exposure
+
+#### Recommendationservice boundary
+
+Strengths:
+
+- direct one-to-one dependency on `productcatalogservice`
+- true service-to-service interaction
+- minimal dependency surface
+
+Limitation:
+
+- output is nondeterministic because recommendations are randomly sampled
 
 ---
 
-### 5. Final Seam Selection
+### 5. Selected Integration Boundary
 
-#### Selected Seam
+The selected integration boundary is `recommendationservice → productcatalogservice`.
 
-recommendationservice → productcatalogservice
+This boundary provides the best overall balance of:
 
-Reasoning:
+- minimal runtime dependencies
+- a clear service boundary
+- a narrow and intelligible assertion surface
+- low setup and execution complexity
 
-This seam provides the best balance of:
+#### Fallback Design Option
 
-- Minimal runtime dependencies
-- Clear service boundary
-- Strong demonstration of integration testing principles
-- Low setup and execution complexity
+Fallback boundary: `frontend → productcatalogservice` via `/product-meta/{id}`
 
-#### Fallback Seam
+This remains a viable alternative because it provides:
 
-frontend → productcatalogservice (/product-meta/{id})
+- a deterministic JSON response
+- a simple assertion surface
 
-Reasoning:
+It was not selected as the primary design because:
 
-- Deterministic JSON response
-- Simple assertion surface
-
-Rejected as primary due to:
-
-- Frontend startup complexity
-- Not a pure two-service interaction
+- frontend startup requires a broader dependency configuration
+- it is less pure as a two-service boundary
 
 ---
 
@@ -153,38 +169,36 @@ Rejected as primary due to:
 
 ### Test Type
 
-Service Integration Test (gRPC boundary)
+Service integration test at the gRPC boundary
 
 ### Assertion Strategy
 
-Due to nondeterminism in recommendation output:
+Because recommendation output is nondeterministic, the test uses invariant-based
+assertions rather than exact-value matching.
 
-Use invariant-based assertions, not exact value matching.
+### Test Verifies
 
-### Test Validates
+Given a valid product ID, the test asserts that:
 
-Given a valid product ID, assert:
+- recommendations are returned
+- returned IDs are unique
+- returned IDs do not include the excluded product ID
+- returned IDs exist in the live product catalog
+- returned count is between 1 and 5
 
-- Recommendations are returned
-- Returned IDs are:
-  - Unique
-  - Not equal to the input product
-  - Present in the product catalog
-  - Count is between 1 and 5
+### Validation Scope
 
-### Why This Is Correct
+This validates:
 
-This verifies:
+- `recommendationservice` successfully calls `productcatalogservice`
+- `productcatalogservice` returns catalog data that is usable by the caller
+- the service boundary is functioning with live runtime dependencies
 
-- recommendationservice successfully calls productcatalogservice
-- productcatalogservice returns valid data
-- integration contract is functioning
+This intentionally avoids coupling to:
 
-Without coupling to:
-
-- exact data
+- exact recommendation values
 - ordering
-- random selection behaviour
+- random sampling output
 
 ---
 
@@ -194,25 +208,25 @@ Without coupling to:
 
 Run only the required services:
 
-1. productcatalogservice
-2. recommendationservice
+1. `productcatalogservice`
+2. `recommendationservice`
 
-Then run a Python integration script.
+Then execute a Python integration script against their live gRPC endpoints.
 
 ### Harness Choice
 
 Plain Python script
 
-Reasons:
+Rationale:
 
-- Minimal overhead
-- Easy to read and explain
-- No need for full test framework
-- Reuses existing gRPC stubs
+- minimal implementation overhead
+- easy to audit
+- no need for an additional test framework
+- direct reuse of existing generated gRPC stubs
 
 ### File Location
 
-src/recommendationservice/integration_check.py
+`src/recommendationservice/integration_check.py`
 
 ### Local Execution
 
@@ -223,14 +237,15 @@ Start services:
 go run .
 
 # recommendationservice
+$env:PORT='18080'
 $env:PRODUCT_CATALOG_SERVICE_ADDR='127.0.0.1:3550'
 python recommendation_server.py
 ```
 
-Run test:
+Run the test:
 
 ```powershell
-python integration_check.py
+python integration_check.py --recommendation-addr 127.0.0.1:18080 --catalog-addr 127.0.0.1:3550
 ```
 
 ---
@@ -239,62 +254,47 @@ python integration_check.py
 
 ### Existing CI Capabilities
 
-The repo already provides:
+The repository already provides:
 
-- Deployment via Skaffold
-- Pod readiness checks
-- Post-deploy smoke validation
+- deployment via Skaffold
+- pod readiness checks
+- post-deployment smoke validation
 
 ### Integration Strategy
 
-Rather than introducing a new pipeline:
-
-Extend existing CI with a post-deploy validation step.
+The integration test executes as a post-deployment validation step within the
+existing deployment workflow.
 
 ### Execution Method
 
-Run test inside the cluster:
+Run the check inside the deployed cluster:
 
-```
+```bash
 kubectl exec deploy/recommendationservice -- \
   python /recommendationservice/integration_check.py
 ```
 
-### Why This Approach
-
-- Reuses existing deployment pipeline
-- Avoids rebuilding infrastructure
-- Keeps test colocated with service runtime
-- Minimises CI complexity
+This keeps execution aligned with the deployed runtime while reusing the
+existing deployment and readiness flow.
 
 ---
 
 ## Trade-offs
 
-| Decision                  | Trade-off                                      |
-|--------------------------|-----------------------------------------------|
-| Use Python script        | Not aligned with existing Go/C# test frameworks|
-| Invariant assertions     | Less strict than snapshot tests               |
-| Direct service startup   | Not identical to full production deployment   |
-| kubectl exec in CI       | Slightly less pure than standalone CI runner  |
+| Decision | Trade-off |
+| --- | --- |
+| Use a Python script | Uses a different runtime from the existing unit-test suites |
+| Invariant-based assertions | Trades strictness for robustness under nondeterministic behaviour |
+| Direct service startup | Simpler than full-environment execution but not identical to full deployment topology |
+| `kubectl exec` post-deploy execution | Relies on the deployed runtime instead of introducing a separate dedicated test runner |
 
 ---
 
-## Summary
+## Design Rationale Summary
 
-We deliberately chose:
+The selected boundary keeps the dependency surface small, exercises a clear
+service-to-service interaction, and supports invariant-based validation without
+coupling to unstable recommendation output. The resulting test is locally
+executable with a small runtime footprint and fits naturally into the existing
+deployment validation workflow as a post-deployment check.
 
-- A true service-to-service seam
-- A minimal, high-signal test
-- An invariant-based assertion model
-- A low-friction execution path
-- A CI integration that reuses existing workflows
-
-This results in:
-
-- Demonstration focused displaying testing judgment
-- Clearly explanable
-- Low implementation risk
-- High signal-to-effort ratio
-
----
