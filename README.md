@@ -137,6 +137,8 @@ Find **Protocol Buffers Descriptions** at the [`./protos` directory](/protos).
 ## Documentation
 
 - [Development](/docs/development-guide.md) to learn how to run and develop this app locally.
+- [Integration Test Design](/docs/integration-test_design.md) for rationale and design of a service-level integration test.
+- [Recommendation Service Integration Check](/src/recommendationservice/README.md) for execution details and CI-style validation.
 
 ## Demos featuring Online Boutique
 

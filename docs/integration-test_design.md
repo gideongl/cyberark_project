@@ -277,6 +277,17 @@ kubectl exec deploy/recommendationservice -- \
 This keeps execution aligned with the deployed runtime while reusing the
 existing deployment and readiness flow.
 
+### Deployment Validation Note
+
+This execution path was validated successfully against a rebuilt and redeployed
+`recommendationservice` image. After rollout completion,
+`integration_check.py` was present in `/recommendationservice` and the
+documented `kubectl exec` command completed successfully against the deployed
+environment.
+
+The previously observed missing-script failure was caused by a stale deployed
+image rather than a Dockerfile or packaging design defect.
+
 ---
 
 ## Trade-offs
@@ -297,4 +308,3 @@ service-to-service interaction, and supports invariant-based validation without
 coupling to unstable recommendation output. The resulting test is locally
 executable with a small runtime footprint and fits naturally into the existing
 deployment validation workflow as a post-deployment check.
-

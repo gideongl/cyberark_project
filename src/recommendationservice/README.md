@@ -58,3 +58,24 @@ kubectl exec deploy/recommendationservice -- \
   --recommendation-addr localhost:8080 \
   --catalog-addr productcatalogservice:3550
 ```
+
+## Verified in-cluster execution
+
+The deployed execution path below was validated successfully against the
+rebuilt and redeployed `recommendationservice` image.
+
+```powershell
+kubectl rollout status deployment/recommendationservice
+kubectl get pods -l app=recommendationservice
+kubectl exec deploy/recommendationservice -- ls /recommendationservice
+kubectl exec deploy/recommendationservice -- python /recommendationservice/integration_check.py --recommendation-addr localhost:8080 --catalog-addr productcatalogservice:3550
+```
+
+```text
+Integration check passed: 5 recommendation(s) returned, excluded=OLJCESPC7Z, catalog_size=9
+```
+
+The earlier missing-script failure was caused by a stale deployed image. After
+rebuilding and redeploying from the current repository state,
+`integration_check.py` was present at `/recommendationservice` and executed as
+documented.
