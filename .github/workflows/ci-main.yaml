@@ -103,6 +103,14 @@ jobs:
         kubectl wait --for=condition=available --timeout=1000s deployment/productcatalogservice
         kubectl wait --for=condition=available --timeout=1000s deployment/recommendationservice
         kubectl wait --for=condition=available --timeout=1000s deployment/shippingservice
+    - name: Run recommendationservice integration check
+      timeout-minutes: 5
+      run: |
+        set -x
+        kubectl exec deploy/recommendationservice -- \
+          python /recommendationservice/integration_check.py \
+          --recommendation-addr localhost:8080 \
+          --catalog-addr productcatalogservice:3550
     - name: Smoke Test
       timeout-minutes: 5
       run: |
