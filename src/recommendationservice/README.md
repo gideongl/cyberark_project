@@ -49,8 +49,10 @@ python integration_check.py --recommendation-addr 127.0.0.1:18080 --catalog-addr
 
 ## CI-style invocation after deploy
 
-After the existing deploy and readiness steps complete, the same script can run
-inside the recommendationservice container:
+The repository's existing GitHub Actions deploy-validation workflows now run
+this check after deployment readiness completes and before the existing
+loadgenerator smoke test. The same command can also be run manually inside the
+deployed `recommendationservice` container:
 
 ```bash
 kubectl exec deploy/recommendationservice -- \
@@ -59,9 +61,15 @@ kubectl exec deploy/recommendationservice -- \
   --catalog-addr productcatalogservice:3550
 ```
 
+Packaging the check in `recommendationservice` is the smallest viable
+implementation for this exercise because it reuses the deployed runtime image
+and its existing gRPC dependencies. If this post-deploy integration coverage
+expanded into a broader suite, a dedicated test runner or container would be a
+reasonable follow-on refactor.
+
 ## Verified in-cluster execution
 
-The deployed execution path below was validated successfully against the
+The deployed execution path below was manually validated successfully against a
 rebuilt and redeployed `recommendationservice` image.
 
 ```powershell
@@ -79,3 +87,7 @@ The earlier missing-script failure was caused by a stale deployed image. After
 rebuilding and redeploying from the current repository state,
 `integration_check.py` was present at `/recommendationservice` and executed as
 documented.
+
+Hosted GitHub Actions execution of this step was not run from the fork used for
+this work because the upstream repository's secrets and self-hosted runners do
+not transfer to forks.

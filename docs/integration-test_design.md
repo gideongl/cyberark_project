@@ -37,7 +37,7 @@ The design requirements were:
 
 - add a single integration test between two services
 - verify real cooperation between running services
-- support execution in a CI-compatible flow
+- support execution as part of the existing CI deploy-validation flow
 - optimise for boundary clarity rather than broad coverage
 
 Existing repository capabilities:
@@ -262,8 +262,10 @@ The repository already provides:
 
 ### Integration Strategy
 
-The integration test executes as a post-deployment validation step within the
-existing deployment workflow.
+The integration check is wired into the repository's existing GitHub Actions
+deploy-validation workflows as a post-deployment validation step. It runs after
+deployment readiness is confirmed and before the existing loadgenerator-based
+smoke test.
 
 ### Execution Method
 
@@ -271,7 +273,9 @@ Run the check inside the deployed cluster:
 
 ```bash
 kubectl exec deploy/recommendationservice -- \
-  python /recommendationservice/integration_check.py
+  python /recommendationservice/integration_check.py \
+  --recommendation-addr localhost:8080 \
+  --catalog-addr productcatalogservice:3550
 ```
 
 This keeps execution aligned with the deployed runtime while reusing the
@@ -279,11 +283,19 @@ existing deployment and readiness flow.
 
 ### Deployment Validation Note
 
-This execution path was validated successfully against a rebuilt and redeployed
-`recommendationservice` image. After rollout completion,
-`integration_check.py` was present in `/recommendationservice` and the
-documented `kubectl exec` command completed successfully against the deployed
-environment.
+The GitHub Actions wiring was added to the repository's existing post-deploy
+validation path in `.github/workflows/ci-pr.yaml` and
+`.github/workflows/ci-main.yaml`.
+
+The in-cluster execution path was also manually validated successfully against a
+rebuilt and redeployed `recommendationservice` image. After rollout
+completion, `integration_check.py` was present in `/recommendationservice` and
+the documented `kubectl exec` command completed successfully against the
+deployed environment.
+
+Hosted end-to-end execution of the updated GitHub Actions workflows was not run
+from the fork used for this work, because the upstream repository's secrets and
+self-hosted runners do not transfer to forks.
 
 The previously observed missing-script failure was caused by a stale deployed
 image rather than a Dockerfile or packaging design defect.

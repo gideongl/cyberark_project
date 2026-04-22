@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Live integration check for the recommendationservice -> productcatalogservice boundary."""
+
 import argparse
 import sys
 
@@ -28,7 +30,7 @@ DEFAULT_RECOMMENDATION_ADDR = "127.0.0.1:8080"
 DEFAULT_EXCLUDED_PRODUCT_ID = "OLJCESPC7Z"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
-
+# Block until the target gRPC service is ready to accept requests
 def _wait_for_channel(channel, target, timeout_seconds):
     try:
         grpc.channel_ready_future(channel).result(timeout=timeout_seconds)
@@ -61,6 +63,8 @@ def _fetch_recommendations(recommendation_addr, excluded_product_id, timeout_sec
 
 
 def _assert_valid_recommendations(recommendation_ids, excluded_product_id, catalog_ids):
+    # Recommendation output is intentionally nondeterministic, so the check
+    # enforces stable behavioral invariants rather than exact product IDs.
     if not recommendation_ids:
         raise AssertionError("Recommendation response was empty")
 
@@ -126,6 +130,8 @@ def main():
 
     catalog = _fetch_catalog(args.catalog_addr, args.timeout_seconds)
     catalog_ids = {product.id for product in catalog}
+    # Validate the excluded ID against the live catalog first so the request and
+    # downstream assertions are anchored to real deployed data.
     if args.excluded_product_id not in catalog_ids:
         raise AssertionError(
             "Excluded product ID was not present in the live catalog: "
