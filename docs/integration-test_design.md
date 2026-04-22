@@ -186,6 +186,22 @@ Given a valid product ID, the test asserts that:
 - returned IDs exist in the live product catalog
 - returned count is between 1 and 5
 
+### Test Execution Flow
+
+The integration check executes the following steps against the live system:
+
+1. Fetch the full product catalog from `productcatalogservice`
+2. Validate that the excluded product ID exists in the live catalog
+3. Request recommendations from `recommendationservice` using the excluded product ID
+4. Validate the returned recommendation IDs against the catalog using invariant-based checks:
+   - non-empty response
+   - maximum count constraint
+   - uniqueness
+   - exclusion of the requested product ID
+   - existence of all IDs in the live catalog
+
+This ordering ensures that all assertions are grounded in the current runtime state of the system rather than static assumptions.
+
 ### Validation Scope
 
 This validates:
