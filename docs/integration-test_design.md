@@ -186,6 +186,18 @@ Given a valid product ID, the test asserts that:
 - returned IDs exist in the live product catalog
 - returned count is between 1 and 5
 
+### Test Input Selection
+
+The integration test uses a fixed product ID as the excluded item in the
+recommendation request. This ID is chosen from the reference dataset to provide
+a stable and meaningful test input.
+
+To avoid coupling the test to static assumptions, the ID is validated against
+the live product catalog at runtime before use. If the ID is not present, the
+test fails early.
+
+This approach balances input stability with robustness against dataset changes.
+
 ### Test Execution Flow
 
 The integration check executes the following steps against the live system:
